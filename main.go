@@ -133,7 +133,7 @@ func main() {
 			Name:      "generate",
 			ArgsUsage: "<(male|m)|(female|f)>",
 			Aliases:   []string{"g"},
-			Usage:     "Generates random avatar",
+			Usage:     "Generates random nft",
 			Flags: []cli.Flag{
 				&cli.StringFlag{
 					Name:  "output,o",
