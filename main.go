@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"embed"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"hash/fnv"
 	"image"
@@ -28,8 +27,6 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-var ErrUnsupportedGender = errors.New("unsupported gender")
-
 // Base NFT Structure
 type Nft struct {
 	ID          string      `json:"id"`
@@ -46,14 +43,11 @@ type Attribute struct {
 
 type store struct {
 	Background Background
-	Male       nft
-	Female     nft
 }
 
 type Background struct {
-	CompositeTraitOne   []string
-	CompositeTraitTwo   []string
-	CompositeTraitThree []string
+	Linework []string
+	Fill     []string
 }
 
 type Gender int
@@ -69,40 +63,14 @@ var dataFS embed.FS
 var assetsStore *store
 
 type Metadata struct {
-	Gender              string
-	CompositeTraitOne   string
-	CompositeTraitTwo   string
-	CompositeTraitThree string
-	TraitOne            string
-	TraitOneDependent   string
-	TraitThree          string
-	// Gender         string
-	// Canvas         string
-	// BackgroundType string
-	// BackgroundFill string
-	// FurType        string
-	// FurFill        string
-	// Eyes           string
-	// Accessories    string
-	// Hair           string
-	// Mouth          string
-	// Earrings       string
-	// Hats           string
+	Linework string
+	Fill     string
 }
 
 // Ape Attributes as Struct
 type nft struct {
-	AllTraitOneOptions          []string
-	AllTraitOneDependentOptions []string
-	AllTraitThreeOptions        []string
-	// FurType     []string
-	// FurFill     []string
-	// Eyes        []string
-	// Hair        []string
-	// Mouth       []string
-	// Earrings    []string
-	// Hats        []string
-	// Accessories []string
+	Lineworks []string
+	FIlls     []string
 }
 
 func check(e error) {
@@ -112,12 +80,8 @@ func check(e error) {
 }
 
 func init() {
-	male := getNFT(MALE)
-	female := getNFT(FEMALE)
 	background := getBackground()
 	assetsStore = &store{
-		Male:       male,       // Male Specific Traits
-		Female:     female,     // Female Specific Traits
 		Background: background, // Background Traits + Can be be unisex traits + Add assets to store as necessary
 	}
 
@@ -130,10 +94,9 @@ func main() {
 	app.Usage = "NFT generator service CLI"
 	app.Commands = []*cli.Command{
 		{
-			Name:      "generate",
-			ArgsUsage: "<(male|m)|(female|f)>",
-			Aliases:   []string{"g"},
-			Usage:     "Generates random nft",
+			Name:    "generate",
+			Aliases: []string{"g"},
+			Usage:   "Generates random nft",
 			Flags: []cli.Flag{
 				&cli.StringFlag{
 					Name:  "output,o",
@@ -142,24 +105,7 @@ func main() {
 				},
 			},
 			Action: func(c *cli.Context) error {
-				var g Gender
-				var err error
-				switch c.Args().First() {
-				case "male", "m":
-					g = MALE
-				case "female", "f":
-					g = FEMALE
-				default:
-					return fmt.Errorf("incorrect gender param. Run `nftgen help generate`")
-				}
-
-				username := c.String("username")
-				if username != "" {
-					err = GenerateFile(g, c.String("output"))
-				} else {
-					err = GenerateFile(g, c.String("output"))
-				}
-				return err
+				return GenerateFile(c.String("output"))
 			},
 		},
 	}
@@ -183,143 +129,63 @@ func generateRandomString() string {
 	return output.String()
 }
 
-func Generate(gender Gender) (image.Image, Metadata, error) {
+func Generate() (image.Image, Metadata, error) {
 	rand.Seed(time.Now().UnixNano())
 	h := fnv.New32a()
 
 	_, err := h.Write([]byte(string(generateRandomString())))
 
 	check(err)
-	switch gender {
-	case MALE:
-		return randomNFT(assetsStore.Male, int64(h.Sum32()), MALE)
-	case FEMALE:
-		return randomNFT(assetsStore.Female, int64(h.Sum32()), FEMALE)
-	default:
-		return nil, Metadata{}, ErrUnsupportedGender
-	}
+	return randomNFT(nft{}, int64(h.Sum32()))
 }
 
-func GenerateFile(gender Gender, filePath string) error {
-	img, metadata, err := Generate(gender)
+func GenerateFile(filePath string) error {
+	img, metadata, err := Generate()
 	check(err)
 
 	return saveToFile(img, filePath, metadata)
 }
 
-func randomNFT(n nft, seed int64, gender Gender) (img image.Image, meta Metadata, err error) {
-	var genderPath string
-	switch gender {
-	case FEMALE:
-		genderPath = "female"
-	case MALE:
-		genderPath = "male"
-	}
+func randomNFT(n nft, seed int64) (img image.Image, meta Metadata, err error) {
 
-	nftImage := image.NewRGBA(image.Rect(0, 0, 4000, 4000))
+	nftImage := image.NewRGBA(image.Rect(0, 0, 4500, 1500))
 
 	// Generate Background
-	compositeTraitOneChoice := selectTraitOne(assetsStore.Background.CompositeTraitOne)
-	fmt.Println("compositeTraitOneChoice: " + compositeTraitOneChoice)
-	compositeTraitOneChoicePath := ""
-	for i := 0; i < len(assetsStore.Background.CompositeTraitOne); i++ {
-		if formatProperty(trimProperty(assetsStore.Background.CompositeTraitOne[i])) == compositeTraitOneChoice {
-			compositeTraitOneChoicePath = assetsStore.Background.CompositeTraitOne[i]
+	lineworkChoice := selectLinework(assetsStore.Background.Linework)
+	fmt.Println("lineworkChoice: " + lineworkChoice)
+	lineworkChoicePath := ""
+	for i := 0; i < len(assetsStore.Background.Linework); i++ {
+		if formatProperty(trimProperty(assetsStore.Background.Linework[i])) == lineworkChoice {
+			lineworkChoicePath = assetsStore.Background.Linework[i]
 		}
 	}
-	compositeTraitOne := compositeTraitOneChoicePath
+	linework := lineworkChoicePath
 
-	compositeTraitTwoChoice := selectCompositeTraitTwo(assetsStore.Background.CompositeTraitTwo)
-	fmt.Println("compositeTraitTwoChoice: " + compositeTraitTwoChoice)
-	compositeTraitTwoChoicePath := ""
-	for i := 0; i < len(assetsStore.Background.CompositeTraitTwo); i++ {
-		if formatProperty(trimProperty(assetsStore.Background.CompositeTraitTwo[i])) == compositeTraitTwoChoice {
-			compositeTraitTwoChoicePath = assetsStore.Background.CompositeTraitTwo[i]
+	fillChoice := selectFill(assetsStore.Background.Fill)
+	fmt.Println("fillChoice: " + fillChoice)
+	fillChoicePath := ""
+	for i := 0; i < len(assetsStore.Background.Fill); i++ {
+		if formatProperty(trimProperty(assetsStore.Background.Fill[i])) == fillChoice {
+			fillChoicePath = assetsStore.Background.Fill[i]
 		}
 	}
-	compositeTraitTwo := compositeTraitTwoChoicePath
-
-	assetsStore.Background.CompositeTraitThree = importAssetNames("data/backgrounds/composite-trait-two/" + trimProperty(compositeTraitTwo))
-	CompositeTraitThreeChoice := selectCompositeTraitThree(compositeTraitTwoChoice, assetsStore.Background.CompositeTraitThree)
-	fmt.Println("CompositeTraitThreeChoice: " + CompositeTraitThreeChoice)
-	CompositeTraitThreeChoicePath := ""
-	for i := 0; i < len(assetsStore.Background.CompositeTraitThree); i++ {
-		if formatProperty(trimProperty(assetsStore.Background.CompositeTraitThree[i])) == CompositeTraitThreeChoice {
-			CompositeTraitThreeChoicePath = assetsStore.Background.CompositeTraitThree[i]
-		}
-	}
-	compositeTraitThree := CompositeTraitThreeChoicePath
-
-	// Generate Base Traits
-	traitOneChoice := selectTraitOne(n.AllTraitOneOptions)
-	fmt.Println("TraitOne: " + traitOneChoice)
-	traitOneChoicePath := ""
-	for i := 0; i < len(n.AllTraitOneOptions); i++ {
-		if formatProperty(trimProperty(n.AllTraitOneOptions[i])) == traitOneChoice {
-			traitOneChoicePath = n.AllTraitOneOptions[i]
-		}
-	}
-	traitOne := traitOneChoicePath
-
-	// Generate Trait Two Dependent on Trait One
-	n.AllTraitOneDependentOptions = importAssetNames("data/" + genderPath + "/trait-one-dependent/" + trimProperty(strings.ToLower(fmt.Sprintf("%s", traitOne))))
-	traitOneDependentTraitChoice := selectTraitOneDependentTrait(traitOneChoice, n.AllTraitOneDependentOptions)
-	fmt.Println("TraitOneDendentTrait Options: " + traitOneDependentTraitChoice)
-	traitOneDependentTraitChoicePath := ""
-	for i := 0; i < len(n.AllTraitOneDependentOptions); i++ {
-		if formatProperty(trimProperty(n.AllTraitOneDependentOptions[i])) == traitOneDependentTraitChoice {
-			traitOneDependentTraitChoicePath = n.AllTraitOneDependentOptions[i]
-		}
-	}
-	traitOneDependentTrait := traitOneDependentTraitChoicePath
-
-	traitThreeChoice := selectTraitThree(n.AllTraitThreeOptions)
-	fmt.Println("Eyes: " + traitThreeChoice)
-	traitThreeChoicePath := ""
-	for i := 0; i < len(n.AllTraitThreeOptions); i++ {
-		if formatProperty(trimProperty(n.AllTraitThreeOptions[i])) == traitThreeChoice {
-			traitThreeChoicePath = n.AllTraitThreeOptions[i]
-		}
-	}
-	traitThree := traitThreeChoicePath
+	fill := fillChoicePath
 
 	// Generate Metadata
 	meta = Metadata{
-		Gender:              strings.Title(genderPath),
-		CompositeTraitOne:   formatProperty(trimProperty(compositeTraitOne)),
-		CompositeTraitTwo:   formatProperty(trimProperty(compositeTraitTwo)),
-		CompositeTraitThree: formatProperty(trimProperty(compositeTraitThree)),
-		TraitOne:            formatProperty(trimProperty(traitOne)),
-		TraitOneDependent:   formatProperty(trimProperty(traitOneDependentTrait)),
-		TraitThree:          formatProperty(trimProperty(traitThree)),
+		Linework: formatProperty(trimProperty(linework)),
+		Fill:     formatProperty(trimProperty(fill)),
 	}
 
 	// Can use conditionals with string matching to affect draw order here
-	err = drawImage(nftImage, compositeTraitOne, err)
-	err = drawImage(nftImage, compositeTraitTwo, err)
-	err = drawImage(nftImage, compositeTraitThree, err)
-	err = drawImage(nftImage, traitOne, err)
-	err = drawImage(nftImage, traitOneDependentTrait, err)
-	err = drawImage(nftImage, traitThree, err)
+	err = drawImage(nftImage, fill, err)
+	err = drawImage(nftImage, linework, err)
 
 	return nftImage, meta, err
 }
 
-func getNFT(gender Gender) nft {
-	var genderPath string
-
-	switch gender {
-	case FEMALE:
-		genderPath = "female"
-	case MALE:
-		genderPath = "male"
-	}
-
-	assetList := nft{
-		AllTraitOneOptions:          importAssetNames("data/" + genderPath + "/trait-one-options"),
-		AllTraitOneDependentOptions: importAssetNames("data/" + genderPath + "/trait-one-dependent-options"),
-		AllTraitThreeOptions:        importAssetNames("data/" + genderPath + "/trait-three-options"),
-	}
+func getNFT() nft {
+	assetList := nft{}
 	return assetList
 }
 
@@ -334,134 +200,36 @@ const (
 	COMMON    = 10
 )
 
-func selectcompositeTraitOne(canvases []string) string {
+func selectFill(fills []string) string {
 	rand.Seed(time.Now().UTC().UnixNano())
 
 	c, err := wr.NewChooser(
-		wr.Choice{Item: "Option 1", Weight: EPIC},
-		wr.Choice{Item: "Option 2", Weight: COMMON},
-		wr.Choice{Item: "Option 3", Weight: RARE},
-		wr.Choice{Item: "Option 4", Weight: COMMON},
-		wr.Choice{Item: "Option 5", Weight: RARE},
-		wr.Choice{Item: "Option 6", Weight: COMMON},
-		wr.Choice{Item: "Option 7", Weight: COMMON},
+		wr.Choice{Item: "Abyssal", Weight: COMMON},
+		wr.Choice{Item: "Amnesia", Weight: COMMON},
+		wr.Choice{Item: "Azure", Weight: COMMON},
+		wr.Choice{Item: "Coral", Weight: COMMON},
+		wr.Choice{Item: "Emerald", Weight: COMMON},
+		wr.Choice{Item: "Graphite", Weight: COMMON},
+		wr.Choice{Item: "Inferno", Weight: COMMON},
+		wr.Choice{Item: "Mystic", Weight: COMMON},
+		wr.Choice{Item: "Mythic", Weight: COMMON},
+		wr.Choice{Item: "Neon", Weight: COMMON},
+		wr.Choice{Item: "Peach", Weight: COMMON},
+		wr.Choice{Item: "Sea Storm", Weight: COMMON},
+		wr.Choice{Item: "Slime", Weight: COMMON},
+		wr.Choice{Item: "Sunshine", Weight: COMMON},
+		wr.Choice{Item: "Wildfire", Weight: COMMON},
 	)
 	check(err)
 
 	return c.Pick().(string)
 }
 
-func selectCompositeTraitTwo(compositeTraitTwos []string) string {
+func selectLinework(lineworks []string) string {
 	rand.Seed(time.Now().UTC().UnixNano())
 
 	c, err := wr.NewChooser(
-		wr.Choice{Item: "Option 1", Weight: COMMON},
-		wr.Choice{Item: "Option 2", Weight: COMMON},
-		wr.Choice{Item: "Option 3", Weight: COMMON},
-	)
-	check(err)
-
-	return c.Pick().(string)
-}
-
-func selectCompositeTraitThree(compositeTraitTwo string, backgroundFills []string) string {
-	rand.Seed(time.Now().UTC().UnixNano())
-
-	switch {
-	// Nested rarity Example
-	case compositeTraitTwo == "Option 1":
-		c, err := wr.NewChooser(
-			wr.Choice{Item: "Option 1a", Weight: COMMON},
-			wr.Choice{Item: "Option 2a", Weight: COMMON},
-			wr.Choice{Item: "Option 3a", Weight: COMMON},
-		)
-		check(err)
-		return c.Pick().(string)
-	case compositeTraitTwo == "Option 2":
-		c, err := wr.NewChooser(
-			wr.Choice{Item: "Option 2a", Weight: COMMON},
-			wr.Choice{Item: "Option 2b", Weight: COMMON},
-			wr.Choice{Item: "Option 2c", Weight: COMMON},
-		)
-		check(err)
-		return c.Pick().(string)
-	case compositeTraitTwo == "Option 3":
-		c, err := wr.NewChooser(
-			wr.Choice{Item: "Option 3a", Weight: COMMON},
-			wr.Choice{Item: "Option 3b", Weight: COMMON},
-			wr.Choice{Item: "Option 3c", Weight: COMMON},
-		)
-		check(err)
-		return c.Pick().(string)
-	}
-
-	return ""
-}
-
-func selectTraitOne(traitOnes []string) string {
-	rand.Seed(time.Now().UTC().UnixNano())
-
-	c, err := wr.NewChooser(
-		wr.Choice{Item: "Option 1", Weight: RARE},
-		wr.Choice{Item: "Option 2", Weight: UNCOMMON},
-		wr.Choice{Item: "Option 3", Weight: EPIC},
-		wr.Choice{Item: "Option 4", Weight: COMMON},
-		wr.Choice{Item: "Option 5", Weight: UNCOMMON},
-		wr.Choice{Item: "Option 6", Weight: COMMON},
-		wr.Choice{Item: "Option 7", Weight: UNCOMMON},
-	)
-	check(err)
-
-	return c.Pick().(string)
-}
-
-func selectTraitOneDependentTrait(compositeTraitOne string, AllCompositeTraitOneDependents []string) string {
-	rand.Seed(time.Now().UTC().UnixNano())
-
-	switch {
-	// Nested rarity Example
-	case compositeTraitOne == "Option 1":
-		c, err := wr.NewChooser(
-			wr.Choice{Item: "Option 1a", Weight: COMMON},
-			wr.Choice{Item: "Option 2a", Weight: COMMON},
-			wr.Choice{Item: "Option 3a", Weight: COMMON},
-		)
-		check(err)
-		return c.Pick().(string)
-	case compositeTraitOne == "Option 2":
-		c, err := wr.NewChooser(
-			wr.Choice{Item: "Option 2a", Weight: COMMON},
-			wr.Choice{Item: "Option 2b", Weight: COMMON},
-			wr.Choice{Item: "Option 2c", Weight: COMMON},
-		)
-		check(err)
-		return c.Pick().(string)
-	case compositeTraitOne == "Option 3":
-		c, err := wr.NewChooser(
-			wr.Choice{Item: "Option 3a", Weight: COMMON},
-			wr.Choice{Item: "Option 3b", Weight: COMMON},
-			wr.Choice{Item: "Option 3c", Weight: COMMON},
-		)
-		check(err)
-		return c.Pick().(string)
-	}
-
-	return ""
-}
-
-func selectTraitThree(traitThrees []string) string {
-	rand.Seed(time.Now().UTC().UnixNano())
-
-	c, err := wr.NewChooser(
-		wr.Choice{Item: "Trait Three Option 1", Weight: COMMON},
-		wr.Choice{Item: "Trait Three Option 2", Weight: UNCOMMON},
-		wr.Choice{Item: "Trait Three Option 3", Weight: UNCOMMON},
-		wr.Choice{Item: "Trait Three Option 4", Weight: RARE},
-		wr.Choice{Item: "Trait Three Option 5", Weight: COMMON},
-		wr.Choice{Item: "Trait Three Option 6", Weight: COMMON},
-		wr.Choice{Item: "Trait Three Option 7", Weight: LEGENDARY},
-		wr.Choice{Item: "Trait Three Option 8", Weight: LEGENDARY},
-		wr.Choice{Item: "Trait Three Option 9", Weight: EPIC},
+		wr.Choice{Item: "Linework", Weight: COMMON},
 	)
 	check(err)
 
@@ -470,8 +238,8 @@ func selectTraitThree(traitThrees []string) string {
 
 func getBackground() Background {
 	bg := Background{
-		CompositeTraitOne: importAssetNames("data/backgrounds/composite-trait-one"),
-		CompositeTraitTwo: importAssetNames("data/backgrounds/composite-trait-two"),
+		Linework: importAssetNames("data/banners"),
+		Fill:     importAssetNames("data/banners"),
 	}
 	return bg
 }
@@ -497,48 +265,18 @@ func saveToFile(img image.Image, filePath string, meta Metadata) error {
 
 	attributes := make([]Attribute, 0)
 
-	gender := Attribute{
-		TraitType: "Gender",
-		Value:     meta.Gender,
+	linework := Attribute{
+		TraitType: "Linework",
+		Value:     meta.Linework,
 	}
 
-	compositeTraitOne := Attribute{
-		TraitType: "Composite Trait One",
-		Value:     meta.CompositeTraitOne,
+	fill := Attribute{
+		TraitType: "Fill",
+		Value:     meta.Fill,
 	}
 
-	compositeTraitTwo := Attribute{
-		TraitType: "Composite Trait Two",
-		Value:     meta.CompositeTraitTwo,
-	}
-
-	compositeTraitThree := Attribute{
-		TraitType: "Composite Trait Three",
-		Value:     meta.CompositeTraitThree,
-	}
-
-	traitOne := Attribute{
-		TraitType: "Trait One",
-		Value:     meta.TraitOne,
-	}
-
-	TraitOneDependentTrait := Attribute{
-		TraitType: "Trait Two",
-		Value:     meta.TraitOneDependent,
-	}
-
-	traitThree := Attribute{
-		TraitType: "Trait Three",
-		Value:     meta.TraitThree,
-	}
-
-	attributes = append(attributes, gender)
-	attributes = append(attributes, compositeTraitOne)
-	attributes = append(attributes, compositeTraitTwo)
-	attributes = append(attributes, compositeTraitThree)
-	attributes = append(attributes, traitOne)
-	attributes = append(attributes, TraitOneDependentTrait)
-	attributes = append(attributes, traitThree)
+	attributes = append(attributes, linework)
+	attributes = append(attributes, fill)
 
 	// File Count Directory
 	count, err := getFileCount()
@@ -548,7 +286,7 @@ func saveToFile(img image.Image, filePath string, meta Metadata) error {
 
 	ipfsSampleMeta := Nft{
 		ID:          fmt.Sprintf("%d", count),
-		Name:        fmt.Sprintf("NFT Collection Title #%d", count),
+		Name:        fmt.Sprintf("Banner Example #%d", count),
 		Attributes:  attributes,
 		Image:       "{IPFS_IMAGE_URL}", // String replace w/ script after CID is generated
 		Description: "Description",
@@ -691,22 +429,4 @@ func getFileCount() (count int, err error) {
 		}
 	}
 	return i, nil
-}
-
-func randInt(rnd *rand.Rand, min int, max int) int {
-	return min + rnd.Intn(max-min)
-}
-
-// randStringSliceItem returns random element from slice of string
-func randStringSliceItem(rnd *rand.Rand, slice []string) string {
-	return slice[randInt(rnd, 0, len(slice))]
-}
-
-func jsonPrettyPrint(in string) string {
-	var out bytes.Buffer
-	err := json.Indent(&out, []byte(in), "", "\t")
-	if err != nil {
-		return in
-	}
-	return out.String()
 }
